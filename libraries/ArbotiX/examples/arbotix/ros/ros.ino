@@ -1,7 +1,7 @@
-/* 
+/*
   ArbotiX Firmware for ROS driver
   Copyright (c) 2008-2012 Vanadium Labs LLC.  All right reserved.
- 
+
   Redistribution and use in source and binary forms, with or without
   modification, are permitted provided that the following conditions are met:
 
@@ -10,10 +10,10 @@
       * Redistributions in binary form must reproduce the above copyright
         notice, this list of conditions and the following disclaimer in the
         documentation and/or other materials provided with the distribution.
-      * Neither the name of Vanadium Labs LLC nor the names of its 
-        contributors may be used to endorse or promote products derived 
+      * Neither the name of Vanadium Labs LLC nor the names of its
+        contributors may be used to endorse or promote products derived
         from this software without specific prior written permission.
-  
+
   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
   ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
   WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -24,7 +24,7 @@
   LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
   OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
   ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/ 
+*/
 
 /* Build Configuration */
 
@@ -42,7 +42,7 @@ BioloidController controllers[CONTROLLER_COUNT];
   #include <HServo.h>
   HServo servos[2];
   int servo_vals[2];            // in millis
-#else 
+#else
   #include <Servo.h>
   Servo servos[10];
   int servo_vals[10];           // in millis
@@ -56,7 +56,7 @@ unsigned char alarm_led = 0;    // ?
 
 /* Pose & Sequence Structures */
 typedef struct{
-  unsigned char pose;           // index of pose to transition to 
+  unsigned char pose;           // index of pose to transition to
   int time;                     // time for transition
 } sp_trans_t;
 int poses[30][AX12_MAX_SERVOS]; // poses [index][servo_id-1]
@@ -65,7 +65,7 @@ int seqPos;                     // step in current sequence
 
 #include "user_hooks.h"
 
-/* 
+/*
  * Setup Functions
  */
 void scan(){
@@ -96,7 +96,7 @@ void setup(){
 }
 
 /*
- * Handle Write Requests to ArbotiX Registers 
+ * Handle Write Requests to ArbotiX Registers
  */
 unsigned char handleWrite(){
   int addr  = params[0];  // address to write
@@ -115,7 +115,7 @@ unsigned char handleWrite(){
     }else if(addr == REG_RETURN_LEVEL){
       ret_level = params[k];
     }else if(addr == REG_ALARM_LED){
-      // TODO: 
+      // TODO:
     }else if(addr < REG_SERVO_BASE){
       return ERR_INSTRUCTION; // error - analog are read only
     }else if(addr < REG_MOVING){
@@ -125,7 +125,7 @@ unsigned char handleWrite(){
       if( s >= 4 ){
  #else
       if( s >= 20){
- #endif 
+ #endif
         return ERR_INSTRUCTION;
       }else{
         if( s%2 == 0 ){ // low byte
@@ -136,8 +136,8 @@ unsigned char handleWrite(){
           servo_vals[s] += (params[k]<<8);
           if(servo_vals[s] > 500 && servo_vals[s] < 2500){
             servos[s].writeMicroseconds(servo_vals[s]);
-            if(!servos[s].attached())            
-              servos[s].attach(s);
+            if(!servos[s].attached())
+              servos[s].attach(s + SERVO_PIN_B); // s = 12 or s = 13
           }else if(servo_vals[s] == 0){
             servos[s].detach();
           }
@@ -179,13 +179,13 @@ int handleRead(){
   int checksum = 0;
   int addr = params[0];
   int bytes = params[1];
-  
+
   unsigned char v;
   while(bytes > 0){
-    if(addr == REG_MODEL_NUMBER_L){ 
+    if(addr == REG_MODEL_NUMBER_L){
       v = 44;
     }else if(addr == REG_MODEL_NUMBER_H){
-      v = 1;  // 300 
+      v = 1;  // 300
     }else if(addr == REG_VERSION){
       v = 0;
     }else if(addr == REG_ID){
@@ -205,7 +205,7 @@ int handleRead(){
       v = (PINB>>1);
     #else
       v = PIND;
-    #endif        
+    #endif
     }else if(addr == REG_DIGITAL_IN2){
       // digital 16-23
       v = PINC;
@@ -225,15 +225,15 @@ int handleRead(){
       v = x/4;
     }else if(addr < REG_MOVING){
       // send servo position
-      v = 0;      
+      v = 0;
     }else{
-      v = userRead(addr);  
-    } 
+      v = userRead(addr);
+    }
     checksum += v;
     Serial.write(v);
     addr++;bytes--;
   }
-  
+
   return checksum;
 }
 
@@ -245,7 +245,7 @@ int doPlaySeq(){
     if(Serial.read() == 'H') return 1;
     // load pose
     for(i=0; i<controllers[0].poseSize; i++)
-      controllers[0].setNextPose(i+1,poses[p][i]); 
+      controllers[0].setNextPose(i+1,poses[p][i]);
     controllers[0].interpolateSetup(sequence[seqPos].time);
     while(controllers[0].interpolating)
       controllers[0].interpolateStep();
@@ -267,13 +267,13 @@ void statusPacket(int id, int err){
   Serial.write(255-((id+2+err)%256));
 }
 
-/* 
+/*
  * decode packets: ff ff id length ins params checksum
- *   same as ax-12 table, except, we define new instructions for Arbotix 
+ *   same as ax-12 table, except, we define new instructions for Arbotix
  */
 void loop(){
   int i;
-    
+
   // process messages
   while(Serial.available() > 0){
     // We need to 0xFF at start of packet
@@ -288,7 +288,7 @@ void loop(){
     //    else
     //        mode = 0;
     }else if(mode == 2){   // next byte is index of servo
-      id = Serial.read();    
+      id = Serial.read();
       if(id != 0xff)
         mode = 3;
     }else if(mode == 3){   // next byte is length
@@ -300,24 +300,24 @@ void loop(){
       checksum += ins;
       index = 0;
       mode = 5;
-    }else if(mode == 5){   // read data in 
+    }else if(mode == 5){   // read data in
       params[index] = Serial.read();
       checksum += (int) params[index];
       index++;
       if(index + 1 == length){  // we've read params & checksum
         mode = 0;
-        if((checksum%256) != 255){ 
+        if((checksum%256) != 255){
           // return an error packet: FF FF id Len Err=bad checksum, params=None check
           statusPacket(id, ERR_CHECKSUM);
         }else if(id == 253){  // ID = 253, ArbotiX instruction
-          switch(ins){     
+          switch(ins){
             case AX_WRITE_DATA:
               // send return packet
               statusPacket(id,handleWrite());
               break;
-             
+
             case AX_READ_DATA:
-              checksum = id + params[1] + 2;                            
+              checksum = id + params[1] + 2;
               Serial.write(0xff);
               Serial.write(0xff);
               Serial.write(id);
@@ -327,34 +327,34 @@ void loop(){
               checksum += handleRead();
               Serial.write(255-((checksum)%256));
               break;
-             
+
             case ARB_SIZE_POSE:                   // Pose Size = 7, followed by single param: size of pose
               statusPacket(id,0);
               if(controllers[0].poseSize == 0)
                 controllers[0].setup(18);
               controllers[0].poseSize = params[0];
-              controllers[0].readPose();    
+              controllers[0].readPose();
               break;
-             
+
             case ARB_LOAD_POSE:                   // Load Pose = 8, followed by index, then pose positions (# of param = 2*pose_size)
               statusPacket(id,0);
               for(i=0; i<controllers[0].poseSize; i++)
-                poses[params[0]][i] = params[(2*i)+1]+(params[(2*i)+2]<<8); 
+                poses[params[0]][i] = params[(2*i)+1]+(params[(2*i)+2]<<8);
               break;
-             
-            case ARB_LOAD_SEQ:                    // Load Seq = 9, followed by index/times (# of parameters = 3*seq_size) 
+
+            case ARB_LOAD_SEQ:                    // Load Seq = 9, followed by index/times (# of parameters = 3*seq_size)
               statusPacket(id,0);
               for(i=0;i<(length-2)/3;i++){
                 sequence[i].pose = params[(i*3)];
                 sequence[i].time = params[(i*3)+1] + (params[(i*3)+2]<<8);
               }
               break;
-             
-            case ARB_PLAY_SEQ:                   // Play Seq = A, no params   
+
+            case ARB_PLAY_SEQ:                   // Play Seq = A, no params
               statusPacket(id,0);
               doPlaySeq();
               break;
-             
+
             case ARB_LOOP_SEQ:                   // Play Seq until we recieve a 'H'alt
               statusPacket(id,0);
               while(doPlaySeq() > 0);
@@ -388,7 +388,7 @@ void loop(){
               break;
 
             case ARB_CONTROL_STAT:               // Read status of a controller
-              if(params[0] < CONTROLLER_COUNT){             
+              if(params[0] < CONTROLLER_COUNT){
                 Serial.write((unsigned char)0xff);
                 Serial.write((unsigned char)0xff);
                 Serial.write((unsigned char)id);
@@ -409,7 +409,7 @@ void loop(){
             int start = params[0];    // address to read in control table
             int bytes = params[1];    // # of bytes to read from each servo
             int k = 2;
-            checksum = id + (bytes*(length-4)) + 2;                            
+            checksum = id + (bytes*(length-4)) + 2;
             Serial.write((unsigned char)0xff);
             Serial.write((unsigned char)0xff);
             Serial.write((unsigned char)id);
@@ -430,7 +430,7 @@ void loop(){
               }
             }
             Serial.write((unsigned char)255-((checksum)%256));
-          }else{    
+          }else{
             // TODO: sync write pass thru
             int k;
             setTXall();
@@ -442,8 +442,8 @@ void loop(){
             for(k=0; k<length; k++)
                 ax12write(params[k]);
             // no return
-          }       
-        }else{ // ID != 253, pass thru 
+          }
+        }else{ // ID != 253, pass thru
           switch(ins){
             // TODO: streamline this
             case AX_READ_DATA:
@@ -455,7 +455,7 @@ void loop(){
               }
               ax_rx_buffer[3] = 0;
               break;
-             
+
             case AX_WRITE_DATA:
               if(length == 4){
                 ax12SetRegister(id, params[0], params[1]);
@@ -465,7 +465,7 @@ void loop(){
               }
               statusPacket(id,0);
               break;
-             
+
           }
         }
       }
@@ -474,7 +474,7 @@ void loop(){
   // update joints
   for(int i=0; i<5; i++)
     controllers[i].interpolateStep();
- 
+
 #ifdef USE_BASE
   // update pid
   updatePID();
